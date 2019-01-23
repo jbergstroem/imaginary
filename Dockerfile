@@ -1,5 +1,5 @@
-ARG GOLANG="1.11.4"
-FROM golang:$GOLANG as builder
+ARG GOLANG_VERSION="1.11.4"
+FROM golang:$GOLANG_VERSION as builder
 
 ARG IMAGINARY_VERSION="dev"
 ARG LIBVIPS_VERSION="8.7.4"
@@ -9,16 +9,16 @@ RUN \
   apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ca-certificates \
-  automake build-essential curl \
+  automake build-essential \
   gobject-introspection gtk-doc-tools libglib2.0-dev libjpeg62-turbo-dev libpng-dev \
   libwebp-dev libtiff5-dev libgif-dev libexif-dev libxml2-dev libpoppler-glib-dev \
   swig libmagickwand-dev libpango1.0-dev libmatio-dev libopenslide-dev libcfitsio-dev \
   libgsf-1-dev fftw3-dev liborc-0.4-dev librsvg2-dev && \
   cd /tmp && \
-  curl -OL https://github.com/libvips/libvips/releases/download/v${LIBVIPS_VERSION}/vips-${LIBVIPS_VERSION}.tar.gz && \
+  wget https://github.com/libvips/libvips/releases/download/v${LIBVIPS_VERSION}/vips-${LIBVIPS_VERSION}.tar.gz && \
   tar -zxf vips-${LIBVIPS_VERSION}.tar.gz && \
   cd /tmp/vips-${LIBVIPS_VERSION} && \
-  ./configure --enable-debug=no --without-python $1 && \
+  ./configure --disable-static --disable-debug --without-python $1 && \
   make install && \
   ldconfig && \
   go get -u github.com/golang/dep/cmd/dep
@@ -32,17 +32,14 @@ WORKDIR ${GOPATH}/src/github.com/h2non/imaginary
 # Copy imaginary sources
 COPY . .
 
-# Making sure all dependencies are up-to-date
-RUN rm -rf vendor && dep ensure
-
-# Run quality control
-RUN go test -test.v ./...
-RUN gometalinter github.com/h2non/imaginary
+RUN dep ensure && \
+  go test -test.v ./... && \
+  gometalinter github.com/h2non/imaginary
 
 # Compile imaginary
 RUN go build -a \
     -o $GOPATH/bin/imaginary \
-    -ldflags="-h -X main.Version=${IMAGINARY_VERSION}" \
+    -ldflags="-s -w -h -X main.Version=${IMAGINARY_VERSION}" \
     github.com/h2non/imaginary
 
 FROM debian:stretch-slim
